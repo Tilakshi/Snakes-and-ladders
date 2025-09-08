@@ -12,7 +12,7 @@
 
 int main() {
     Maze maze;
-    initializeMaze(&maze); // This now sets the fixed floor plan
+    createMaze(&maze); // This now sets the fixed floor plan
 
     // Load maze elements (dynamic elements from files)
     loadStairs(&maze, "stairs.txt");

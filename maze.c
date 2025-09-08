@@ -2,40 +2,30 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-// <time.h> is not directly used in this file, so it's not strictly necessary here,
-// but it doesn't hurt if left. I've removed it for cleaner dependency.
-// #include <time.h>
 
 #include "maze.h"
 
-// ---------- MAZE INIT ----------
-void initializeMaze(Maze *maze) {
-    // 1. Initialize all blocks as EMPTY (blocked) by default
-    // Then, selectively mark walkable areas based on the floor plan
+// Creating the maze
+void createMaze(Maze *maze) {
     for (int f = 0; f < FLOORS; f++) {
         for (int w = 0; w < WIDTH; w++) {
             for (int l = 0; l < LENGTH; l++) {
-                maze->blocks[f][w][l] = EMPTY; // Start with all as EMPTY (blocked)
+                maze->blocks[f][w][l] = EMPTY; 
             }
         }
     }
 
-    // 2. Define the specific walkable areas for each floor based on the image description
-
-    // Floor 0 (Described as "Floor 1:- Has a total floor area of 856 square foot with ten (10) blocks width and 25 blocks length.")
-    // This implies the full 10x25 grid is walkable for floor 0.
+    //First floor implementation
     for (int w = 0; w < 10; w++) {   // Width 0 to 9
         for (int l = 0; l < 25; l++) { // Length 0 to 24
+            if((w>=0 && w<4)&&(l>=8 && l<17)){
+                maze->blocks[0][w][l] = SRARTING_AREA;
+            }
             maze->blocks[0][w][l] = WALKABLE;
         }
     }
 
-    // Floor 1 (Described as "Floor 2:- Has a floor area of 784 square foot with two rectangular areas with ten (10) blocks width
-    // and eight (8) blocks length connected by a bridge that is of four (4) blocks width and nine (9) blocks length situated
-    // right above the standing area.")
-
     // First rectangular area (10 width x 8 length)
-    // Assumed to be at length 0-7
     for (int w = 0; w < 10; w++) {   // Width 0 to 9
         for (int l = 0; l < 8; l++) { // Length 0 to 7
             maze->blocks[1][w][l] = WALKABLE;
@@ -43,7 +33,6 @@ void initializeMaze(Maze *maze) {
     }
 
     // Second rectangular area (10 width x 8 length)
-    // Assumed to be at length 17-24
     for (int w = 0; w < 10; w++) {   // Width 0 to 9
         for (int l = 17; l < 25; l++) { // Length 17 to 24
             maze->blocks[1][w][l] = WALKABLE;
@@ -51,15 +40,12 @@ void initializeMaze(Maze *maze) {
     }
 
     // Bridge (4 width x 9 length)
-    // Assumed to connect the two 10x8 areas, centered width-wise
-    for (int w = 3; w < 7; w++) {   // Width 3 to 6 (4 blocks)
+    for (int w = 0; w < 4; w++) {   // Width 3 to 6 (4 blocks)
         for (int l = 8; l < 17; l++) { // Length 8 to 16 (9 blocks)
             maze->blocks[1][w][l] = WALKABLE;
         }
     }
 
-    // Floor 2 (Described as "Floor 3:- Has floor area of 360 square foot and is a rectangular area of ten (10) blocks width
-    // and nine (9) blocks length situated right above the standing area.")
     // Assumed to be at length 8-16, spanning full width
     for (int w = 0; w < 10; w++) {   // Width 0 to 9
         for (int l = 8; l < 17; l++) { // Length 8 to 16 (9 blocks)
@@ -68,6 +54,7 @@ void initializeMaze(Maze *maze) {
     }
 
     // Initialize dynamic arrays to NULL and counts to 0
+    //To put the maze into clean and well defined starting area. Helps to avoid if these contained any garbage values
     maze->stairs = NULL;
     maze->stairs_count = 0;
     maze->poles = NULL;
@@ -76,7 +63,7 @@ void initializeMaze(Maze *maze) {
     maze->walls_count = 0;
 }
 
-// ---------- LOAD FUNCTIONS ----------
+//Loads the data from the given text files
 void loadStairs(Maze *maze, const char *filename) {
     FILE *file = fopen(filename, "r");
     if (!file) {
@@ -213,9 +200,9 @@ void loadSeedValue(){
 void placeStairs(Maze *maze) {
     for (int i = 0; i < maze->stairs_count; i++) {
         Stair *s = &maze->stairs[i];
-        if (isValidPosition(s->start_floor, s->start_width, s->start_length))
+        if (isValidPosition(s->start_floor, s->start_width, s->start_length, maze))
             maze->blocks[s->start_floor][s->start_width][s->start_length] = STAIR;
-        if (isValidPosition(s->end_floor, s->end_width, s->end_length))
+        if (isValidPosition(s->end_floor, s->end_width, s->end_length, maze))
             maze->blocks[s->end_floor][s->end_width][s->end_length] = STAIR;
     }
 }
@@ -226,7 +213,7 @@ void placePoles(Maze *maze) {
         int min_floor = (p->start_floor < p->end_floor) ? p->start_floor : p->end_floor;
         int max_floor = (p->start_floor > p->end_floor) ? p->start_floor : p->end_floor;
         for (int f = min_floor; f <= max_floor; f++) {
-            if (isValidPosition(f, p->width, p->length))
+            if (isValidPosition(f, p->width, p->length, maze))
                 maze->blocks[f][p->width][p->length] = POLE;
         }
     }
@@ -235,8 +222,8 @@ void placePoles(Maze *maze) {
 void placeWalls(Maze *maze) {
     for (int i = 0; i < maze->walls_count; i++) {
         Wall *w = &maze->walls[i];
-        if (!isValidPosition(w->floor, w->start_width, w->start_length) ||
-            !isValidPosition(w->floor, w->end_width, w->end_length)) continue;
+        if (!isValidPosition(w->floor, w->start_width, w->start_length, maze) ||
+            !isValidPosition(w->floor, w->end_width, w->end_length, maze)) continue;
 
         if (w->start_width == w->end_width) {
             int start = (w->start_length < w->end_length) ? w->start_length : w->end_length;
@@ -252,7 +239,7 @@ void placeWalls(Maze *maze) {
     }
 }
 
-// ---------- PLAYERS ----------
+//Initializing Players
 void initializePlayers(Player players[]) {
     // Initial positions as given in the problem
     players[0] = (Player){'A',0,6,12,NORTH,100,true,false}; // Player A starts in starting area
@@ -260,14 +247,12 @@ void initializePlayers(Player players[]) {
     players[2] = (Player){'C',0,9,16,EAST,100,true,false}; // Player C starts in starting area
 }
 
-bool isValidPosition(int floor, int width, int length) {
-    return (floor >= 0 && floor < FLOORS &&
-            width >= 0 && width < WIDTH &&
-            length >= 0 && length < LENGTH);
+bool isValidPosition(int floor, int width, int length, Maze *maze) {
+    return (maze->blocks[floor][width][length] == WALKABLE);
 }
 
 bool isWallBlocked(Maze *maze, int floor, int width, int length) {
-    if (!isValidPosition(floor, width, length)) return true;
+    if (!isValidPosition(floor, width, length, maze)) return true;
     // Also consider if the block is an EMPTY (blocked) area of the floor plan
     return (maze->blocks[floor][width][length] == WALL ||
             maze->blocks[floor][width][length] == EMPTY); // Check for EMPTY too
@@ -286,7 +271,7 @@ bool movePlayer(Maze *maze, Player *player, int steps, int movement_value) {
             default: break;
         }
 
-        if (!isValidPosition(player->floor, new_width, new_length) ||
+        if (!isValidPosition(player->floor, new_width, new_length, maze) ||
             isWallBlocked(maze, player->floor, new_width, new_length)) {
             printf("Player %c rolls %d on the movement dice and cannot move in the %s. Player remains at [%d, %d, %d]\n",
                    player->name, movement_value, directionToString(player->direction),

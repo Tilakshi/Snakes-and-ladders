@@ -9,10 +9,11 @@
 
 // Block types (Make sure EMPTY is defined as your 'blocked' state)
 #define WALKABLE 0
-#define EMPTY    1 // Used for pre-defined blocked areas of the floor plan
-#define STAIR    2
-#define POLE     3
-#define WALL     4
+#define EMPTY 1 // Used for pre-defined blocked areas of the floor plan
+#define STAIR 2
+#define POLE 3
+#define WALL 4
+#define SRARTING_AREA 5
 
 typedef enum {
     NORTH, EAST, SOUTH, WEST, NONE
@@ -75,7 +76,7 @@ typedef struct {
 } Maze;
 
 // Function Prototypes (ensure these match your definitions in maze.c)
-void initializeMaze(Maze *maze);
+void createMaze(Maze *maze);
 void loadStairs(Maze *maze, const char *filename);
 void loadPoles(Maze *maze, const char *filename);
 void loadWalls(Maze *maze, const char *filename);
@@ -84,7 +85,7 @@ void placeStairs(Maze *maze);
 void placePoles(Maze *maze);
 void placeWalls(Maze *maze);
 void initializePlayers(Player players[]);
-bool isValidPosition(int floor, int width, int length);
+bool isValidPosition(int floor, int width, int length, Maze *maze);
 bool isWallBlocked(Maze *maze, int floor, int width, int length);
 bool movePlayer(Maze *maze, Player *player, int steps, int movement_value);
 void handleStairs(Maze *maze, Player *player);
@@ -94,4 +95,4 @@ int rollMovementDice();
 Direction rollDirectionDice();
 const char* directionToString(Direction dir);
 
-#endif // MAZE_H
+#endif 
