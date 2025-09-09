@@ -174,31 +174,59 @@ void loadFlag(Maze *maze, const char *filename) {
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
         printf("Error: Could not open flag file.\n");
-        return;
+        // Log to output file
+        FILE *log = fopen("game_log.txt", "a");
+        if (log) {
+            fprintf(log, "Error: Could not open flag file %s.\n", filename);
+            fclose(log);
+        }
+        exit(EXIT_FAILURE);
     }
     
     int floor, width, length;
     if (fscanf(file, "[%d, %d, %d]\n", &floor, &width, &length) == 3) {
-        // Check if flag can be placed at this position
-        if (isValidPosition(floor, width, length) &&
-            canPlaceStructure(floor, width, length, maze)) {
-            maze->flag_floor = floor;
-            maze->flag_width = width;
-            maze->flag_length = length;
-        } else {
-            printf("Error: Flag position [%d,%d,%d] is not a valid location\n",
-                   floor, width, length);
-            // Set default flag position that is valid
-            maze->flag_floor = 2;
-            maze->flag_width = 5;
-            maze->flag_length = 12;
+        // Check if position is valid and accessible (not EMPTY or WALL)
+        if (!isValidPosition(floor, width, length)) {
+            printf("Error: Flag position [%d,%d,%d] is outside maze bounds.\n", floor, width, length);
+            // Log error
+            FILE *log = fopen("game_log.txt", "a");
+            if (log) {
+                fprintf(log, "Error: Flag position [%d,%d,%d] is outside maze bounds. Aborting game.\n", floor, width, length);
+                fclose(log);
+            }
+            fclose(file);
+            exit(EXIT_FAILURE);
         }
+        
+        BlockType block = maze->blocks[floor][width][length];
+        if (block == EMPTY || block == WALL) {
+            printf("Error: Flag position [%d,%d,%d] is in an inaccessible area (EMPTY or WALL).\n", floor, width, length);
+            // Log error
+            FILE *log = fopen("game_log.txt", "a");
+            if (log) {
+                fprintf(log, "Error: Flag position [%d,%d,%d] is in an inaccessible area (EMPTY or WALL). Aborting game.\n", floor, width, length);
+                fclose(log);
+            }
+            fclose(file);
+            exit(EXIT_FAILURE);
+        }
+        
+        // Valid position
+        maze->flag_floor = floor;
+        maze->flag_width = width;
+        maze->flag_length = length;
+        printf("Flag successfully placed at [%d, %d, %d].\n", floor, width, length);
+        
     } else {
-        printf("Error: Invalid flag format.\n");
-        // Set default flag position
-        maze->flag_floor = 2;
-        maze->flag_width = 5;
-        maze->flag_length = 12;
+        printf("Error: Invalid flag format in %s.\n", filename);
+        // Log error
+        FILE *log = fopen("game_log.txt", "a");
+        if (log) {
+            fprintf(log, "Error: Invalid flag format in %s. Aborting game.\n", filename);
+            fclose(log);
+        }
+        fclose(file);
+        exit(EXIT_FAILURE);
     }
     
     fclose(file);
