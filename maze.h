@@ -88,7 +88,7 @@ void placePoles(Maze *maze);
 void placeWalls(Maze *maze);
 void initializePlayers(Player players[]);
 bool isValidPosition(int floor, int width, int length);
-bool isWallBlocked(Maze *maze, int floor, int width, int length);
+bool isWallBlocked(Maze *maze, int floor, int width, int length, Player *player);
 bool movePlayer(Maze *maze, Player *player, int steps, int movement_value);
 void handleStairs(Maze *maze, Player *player);
 void handlePoles(Maze *maze, Player *player);
