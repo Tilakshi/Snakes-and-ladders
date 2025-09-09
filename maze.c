@@ -16,12 +16,18 @@ void createMaze(Maze *maze) {
     }
 
     //First floor implementation
-    for (int w = 0; w < 10; w++) {   // Width 0 to 9
-        for (int l = 0; l < 25; l++) { // Length 0 to 24
-            if((w>=0 && w<4)&&(l>=8 && l<17)){
-                maze->blocks[0][w][l] = SRARTING_AREA;
+    for (int w = 0; w < 4; w++) {       // Width 0 to 3 (4 blocks)
+        for (int l = 8; l < 17; l++) {  // Length 8 to 16 (9 blocks)
+            maze->blocks[0][w][l] = STARTING_AREA;
+        }
+    }
+    
+    // Rest of floor 0 is walkable (except walls will be placed later)
+    for (int w = 0; w < 10; w++) {
+        for (int l = 0; l < 25; l++) {
+            if (maze->blocks[0][w][l] != STARTING_AREA) {
+                maze->blocks[0][w][l] = WALKABLE;
             }
-            maze->blocks[0][w][l] = WALKABLE;
         }
     }
 
@@ -71,16 +77,21 @@ void loadStairs(Maze *maze, const char *filename) {
         return;
     }
 
+    //To count the number of lines in a file and then reset the
+    //file pointer to the begining
     int count = 0;
-    char line[100];
-    while (fgets(line, sizeof(line), file)) count++;
-    rewind(file);
+    char line[100];//Create a buffer to read each file into
+    while (fgets(line, sizeof(line), file)){
+        count++;
+    } 
+    rewind(file);//Go back to the begining
+    //This part is essential as we will be reading the file from
+    //the begining again
 
     maze->stairs = malloc(count * sizeof(Stair));
     if (maze->stairs == NULL) {
         perror("Failed to allocate memory for stairs");
         fclose(file);
-        return;
     }
     int s = 0;
     while (fscanf(file, "[%d, %d, %d, %d, %d, %d]\n",
@@ -90,12 +101,12 @@ void loadStairs(Maze *maze, const char *filename) {
                   &maze->stairs[s].end_floor,
                   &maze->stairs[s].end_width,
                   &maze->stairs[s].end_length) == 6) {
-        s++;
+        s++;//Keeps track of how many stairs we've successfully read
     }
     maze->stairs_count = s;
     fclose(file);
 }
-
+ 
 void loadPoles(Maze *maze, const char *filename) {
     FILE *file = fopen(filename, "r");
     if (!file) {
@@ -107,6 +118,8 @@ void loadPoles(Maze *maze, const char *filename) {
     char line[100];
     while (fgets(line, sizeof(line), file)) count++;
     rewind(file);
+    //After counting lines, the file pointer is at the end of the file
+    //With this it goes back to begining of the file.
 
     maze->poles = malloc(count * sizeof(Pole));
     if (maze->poles == NULL) {
@@ -159,23 +172,38 @@ void loadWalls(Maze *maze, const char *filename) {
 
 void loadFlag(Maze *maze, const char *filename) {
     FILE *file = fopen(filename, "r");
-    if (!file) {
-        // Default flag position if file not found
+    if (file == NULL) {
+        printf("Error: Could not open flag file.\n");
+        return;
+    }
+    
+    int floor, width, length;
+    if (fscanf(file, "[%d, %d, %d]\n", &floor, &width, &length) == 3) {
+        // Check if flag can be placed at this position
+        if (isValidPosition(floor, width, length) &&
+            canPlaceStructure(floor, width, length, maze)) {
+            maze->flag_floor = floor;
+            maze->flag_width = width;
+            maze->flag_length = length;
+        } else {
+            printf("Error: Flag position [%d,%d,%d] is not a valid location\n",
+                   floor, width, length);
+            // Set default flag position that is valid
+            maze->flag_floor = 2;
+            maze->flag_width = 5;
+            maze->flag_length = 12;
+        }
+    } else {
+        printf("Error: Invalid flag format.\n");
+        // Set default flag position
         maze->flag_floor = 2;
         maze->flag_width = 5;
         maze->flag_length = 12;
-        perror("Error opening flag.txt, using default flag position");
-        return;
     }
-
-    if (fscanf(file, "[%d, %d, %d]\n",
-               &maze->flag_floor,
-               &maze->flag_width,
-               &maze->flag_length) != 3) {
-        fprintf(stderr, "Error reading flag data from flag.txt, using default flag position.\n");
-    }
+    
     fclose(file);
 }
+
 void loadSeedValue(){
     unsigned int seed_value;
     FILE *seed_file = fopen("seed.txt", "r");
@@ -196,14 +224,28 @@ void loadSeedValue(){
 }
    
 
-// ---------- PLACING ----------
+//Placeing the elements in the maze
+
 void placeStairs(Maze *maze) {
     for (int i = 0; i < maze->stairs_count; i++) {
         Stair *s = &maze->stairs[i];
-        if (isValidPosition(s->start_floor, s->start_width, s->start_length, maze))
+        
+        // Only place if position is valid AND can hold a structure
+        if (isValidPosition(s->start_floor, s->start_width, s->start_length) &&
+            canPlaceStructure(s->start_floor, s->start_width, s->start_length, maze)) {
             maze->blocks[s->start_floor][s->start_width][s->start_length] = STAIR;
-        if (isValidPosition(s->end_floor, s->end_width, s->end_length, maze))
+        } else {
+            printf("Warning: Cannot place stair at invalid start position [%d,%d,%d]\n",
+                   s->start_floor, s->start_width, s->start_length);
+        }
+        
+        if (isValidPosition(s->end_floor, s->end_width, s->end_length) &&
+            canPlaceStructure(s->end_floor, s->end_width, s->end_length, maze)) {
             maze->blocks[s->end_floor][s->end_width][s->end_length] = STAIR;
+        } else {
+            printf("Warning: Cannot place stair at invalid end position [%d,%d,%d]\n",
+                   s->end_floor, s->end_width, s->end_length);
+        }
     }
 }
 
@@ -212,9 +254,16 @@ void placePoles(Maze *maze) {
         Pole *p = &maze->poles[i];
         int min_floor = (p->start_floor < p->end_floor) ? p->start_floor : p->end_floor;
         int max_floor = (p->start_floor > p->end_floor) ? p->start_floor : p->end_floor;
+        
         for (int f = min_floor; f <= max_floor; f++) {
-            if (isValidPosition(f, p->width, p->length, maze))
+            // Only place if position is valid AND can hold a structure
+            if (isValidPosition(f, p->width, p->length) &&
+                canPlaceStructure(f, p->width, p->length, maze)) {
                 maze->blocks[f][p->width][p->length] = POLE;
+            } else {
+                printf("Warning: Cannot place pole at invalid position [%d,%d,%d]\n",
+                       f, p->width, p->length);
+            }
         }
     }
 }
@@ -222,8 +271,8 @@ void placePoles(Maze *maze) {
 void placeWalls(Maze *maze) {
     for (int i = 0; i < maze->walls_count; i++) {
         Wall *w = &maze->walls[i];
-        if (!isValidPosition(w->floor, w->start_width, w->start_length, maze) ||
-            !isValidPosition(w->floor, w->end_width, w->end_length, maze)) continue;
+        if (!isValidPosition(w->floor, w->start_width, w->start_length) ||
+            !isValidPosition(w->floor, w->end_width, w->end_length)) continue;
 
         if (w->start_width == w->end_width) {
             int start = (w->start_length < w->end_length) ? w->start_length : w->end_length;
@@ -247,15 +296,32 @@ void initializePlayers(Player players[]) {
     players[2] = (Player){'C',0,9,16,EAST,100,true,false}; // Player C starts in starting area
 }
 
-bool isValidPosition(int floor, int width, int length, Maze *maze) {
-    return (maze->blocks[floor][width][length] == WALKABLE);
+// Check if position is within maze bounds
+bool isValidPosition(int floor, int width, int length) {
+    return (floor >= 0 && floor < FLOORS && 
+            width >= 0 && width < WIDTH && 
+            length >= 0 && length < LENGTH);
+}
+
+// Check if position can hold a structure (stair, pole, wall, flag)
+bool canPlaceStructure(int floor, int width, int length, Maze *maze) {
+    if (!isValidPosition(floor, width, length)) {
+        return false;
+    }
+    
+    BlockType block = maze->blocks[floor][width][length];
+    // Can only place structures on walkable areas or starting area
+    // Cannot place on empty (WALL) blocks
+    return (block == WALKABLE || block == STARTING_AREA);
 }
 
 bool isWallBlocked(Maze *maze, int floor, int width, int length) {
-    if (!isValidPosition(floor, width, length, maze)) return true;
-    // Also consider if the block is an EMPTY (blocked) area of the floor plan
-    return (maze->blocks[floor][width][length] == WALL ||
-            maze->blocks[floor][width][length] == EMPTY); // Check for EMPTY too
+    if (!isValidPosition(floor, width, length)) {
+        return true;
+    }
+    // Consider both WALL and EMPTY as blocked for movement
+    return (maze->blocks[floor][width][length] == WALL || 
+            maze->blocks[floor][width][length] == EMPTY);
 }
 
 bool movePlayer(Maze *maze, Player *player, int steps, int movement_value) {
@@ -271,7 +337,7 @@ bool movePlayer(Maze *maze, Player *player, int steps, int movement_value) {
             default: break;
         }
 
-        if (!isValidPosition(player->floor, new_width, new_length, maze) ||
+        if (!isValidPosition(player->floor, new_width, new_length) ||
             isWallBlocked(maze, player->floor, new_width, new_length)) {
             printf("Player %c rolls %d on the movement dice and cannot move in the %s. Player remains at [%d, %d, %d]\n",
                    player->name, movement_value, directionToString(player->direction),

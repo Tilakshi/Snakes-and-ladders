@@ -1,4 +1,4 @@
-// In maze.h
+// In maze.hjj 
 #ifndef MAZE_H
 #define MAZE_H
 
@@ -7,13 +7,15 @@
 #define LENGTH 25
 #define PLAYERS 3 // Assuming 3 players
 
-// Block types (Make sure EMPTY is defined as your 'blocked' state)
-#define WALKABLE 0
-#define EMPTY 1 // Used for pre-defined blocked areas of the floor plan
-#define STAIR 2
-#define POLE 3
-#define WALL 4
-#define SRARTING_AREA 5
+// REPLACE these #defines:
+typedef enum {
+    WALKABLE,      // 0
+    EMPTY,         // 1  
+    STAIR,         // 2
+    POLE,          // 3
+    WALL,          // 4
+    STARTING_AREA  // 5
+} BlockType;
 
 typedef enum {
     NORTH, EAST, SOUTH, WEST, NONE
@@ -63,7 +65,7 @@ typedef struct {
 
 
 typedef struct {
-    int blocks[FLOORS][WIDTH][LENGTH]; // 3D array for the maze
+    BlockType blocks[FLOORS][WIDTH][LENGTH]; // 3D array for the maze
     Stair *stairs;
     int stairs_count;
     Pole *poles;
@@ -85,7 +87,7 @@ void placeStairs(Maze *maze);
 void placePoles(Maze *maze);
 void placeWalls(Maze *maze);
 void initializePlayers(Player players[]);
-bool isValidPosition(int floor, int width, int length, Maze *maze);
+bool isValidPosition(int floor, int width, int length);
 bool isWallBlocked(Maze *maze, int floor, int width, int length);
 bool movePlayer(Maze *maze, Player *player, int steps, int movement_value);
 void handleStairs(Maze *maze, Player *player);
@@ -94,5 +96,6 @@ void rollDice(Player players[], Maze *maze, int player_index, bool use_direction
 int rollMovementDice();
 Direction rollDirectionDice();
 const char* directionToString(Direction dir);
+bool canPlaceStructure(int floor, int width, int length, Maze *maze);
 
 #endif 

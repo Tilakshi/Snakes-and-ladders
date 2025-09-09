@@ -11,6 +11,8 @@
 // a helper function, it would go *above* main in this file.
 
 int main() {
+
+
     Maze maze;
     createMaze(&maze); // This now sets the fixed floor plan
 
