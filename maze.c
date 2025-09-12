@@ -16,7 +16,7 @@ void createMaze(Maze *maze) {
     }
 
     //First floor implementation
-    for (int w = 0; w < 4; w++) {       // Width 0 to 3 (4 blocks)
+    for (int w = 6; w < 10; w++) {       // Width 0 to 3 (4 blocks)
         for (int l = 8; l < 17; l++) {  // Length 8 to 16 (9 blocks)
             maze->blocks[0][w][l] = STARTING_AREA;
         }
@@ -46,7 +46,7 @@ void createMaze(Maze *maze) {
     }
 
     // Bridge (4 width x 9 length)
-    for (int w = 0; w < 4; w++) {   // Width 3 to 6 (4 blocks)
+    for (int w = 6; w < 10; w++) {   // Width 3 to 6 (4 blocks)
         for (int l = 8; l < 17; l++) { // Length 8 to 16 (9 blocks)
             maze->blocks[1][w][l] = WALKABLE;
         }
@@ -122,7 +122,7 @@ void loadPoles(Maze *maze, const char *filename) {
     //With this it goes back to begining of the file.
 
     maze->poles = malloc(count * sizeof(Pole));
-    if (maze->poles == NULL) {
+    if (maze->poles == NULL) {//Check if the memory allocation fails
         perror("Failed to allocate memory for poles");
         fclose(file);
         return;
@@ -147,7 +147,7 @@ void loadWalls(Maze *maze, const char *filename) {
     }
 
     int count = 0;
-    char line[100];
+    char line[100];//Buffer that provides temporary storage to save the data and delete them afterwards
     while (fgets(line, sizeof(line), file)) count++;
     rewind(file);
 
@@ -180,7 +180,7 @@ void loadFlag(Maze *maze, const char *filename) {
             fprintf(log, "Error: Could not open flag file %s.\n", filename);
             fclose(log);
         }
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);//Terminates the program and returns a status code to the OS
     }
     
     int floor, width, length;
@@ -245,8 +245,7 @@ void loadSeedValue(){
             printf("Failed to read seed from seed.txt.");
         }
         fclose(seed_file); 
-    } else {
-        
+    } else {        
         printf("seed.txt not found.");
     }
 }
@@ -283,14 +282,16 @@ void placePoles(Maze *maze) {
         int min_floor = (p->start_floor < p->end_floor) ? p->start_floor : p->end_floor;
         int max_floor = (p->start_floor > p->end_floor) ? p->start_floor : p->end_floor;
         
+        // Only place poles if the position is valid AND can hold a structure
         for (int f = min_floor; f <= max_floor; f++) {
-            // Only place if position is valid AND can hold a structure
             if (isValidPosition(f, p->width, p->length) &&
                 canPlaceStructure(f, p->width, p->length, maze)) {
                 maze->blocks[f][p->width][p->length] = POLE;
             } else {
-                printf("Warning: Cannot place pole at invalid position [%d,%d,%d]\n",
-                       f, p->width, p->length);
+                printf("Warning: Cannot place pole at invalid position [%d,%d,%d] (block type: %d)\n",
+                       f, p->width, p->length, 
+                       isValidPosition(f, p->width, p->length) ? 
+                       maze->blocks[f][p->width][p->length] : -1);
             }
         }
     }
@@ -303,17 +304,21 @@ void placeWalls(Maze *maze) {
             !isValidPosition(w->floor, w->end_width, w->end_length)) continue;
 
         if (w->start_width == w->end_width) {
+            //This handles the walls that block the horizontal movement of the player
             int start = (w->start_length < w->end_length) ? w->start_length : w->end_length;
             int end = (w->start_length > w->end_length) ? w->start_length : w->end_length;
             for (int l = start; l <= end; l++)
                 maze->blocks[w->floor][w->start_width][l] = WALL;
         } else if (w->start_length == w->end_length) {
+            //This handles the walls that block the vertical movements of the player
             int start = (w->start_width < w->end_width) ? w->start_width : w->end_width;
             int end = (w->start_width > w->end_width) ? w->start_width : w->end_width;
             for (int wd = start; wd <= end; wd++)
                 maze->blocks[w->floor][wd][w->start_length] = WALL;
         }
     }
+    //This specific implementation ensures that the walls are always straight lines. 
+    //Otherwise it will create diagonal walls, which are not allowed in the maze.
 }
 
 //Initializing Players
@@ -335,12 +340,13 @@ bool isValidPosition(int floor, int width, int length) {
 bool canPlaceStructure(int floor, int width, int length, Maze *maze) {
     if (!isValidPosition(floor, width, length)) {
         return false;
-    }
-    
-    BlockType block = maze->blocks[floor][width][length];
+    }else{
+        BlockType block = maze->blocks[floor][width][length];
     // Can only place structures on walkable areas or starting area
     // Cannot place on empty (WALL) blocks
     return (block == WALKABLE || block == STARTING_AREA);
+    }
+    
 }
 
 bool isWallBlocked(Maze *maze, int floor, int width, int length, Player *player) {
@@ -369,10 +375,10 @@ bool movePlayer(Maze *maze, Player *player, int steps, int movement_value) {
         int new_length = player->length;
 
         switch (player->direction) {
-            case NORTH: new_width--; break;
-            case EAST:  new_length++; break;
-            case SOUTH: new_width++; break;
-            case WEST:  new_length--; break;
+            case NORTH: new_width--; break;//[1,5,5]->[1,4,5] Width decreases
+            case EAST:  new_length++; break;//[1,5,5]->[1,5,6] Length increases
+            case SOUTH: new_width++; break;//[1,5,5]->[1,6,5] Width increases
+            case WEST:  new_length--; break;//[1,5,5]->[1,5,4] Length decreases
             default: break;
         }
 
@@ -449,35 +455,46 @@ void handleStairs(Maze *maze, Player *player) {
 void handlePoles(Maze *maze, Player *player) {
     for (int i = 0; i < maze->poles_count; i++) {
         Pole *p = &maze->poles[i];
-        // Player must be on the pole's width/length and above its end floor to slide down
-        if (player->width == p->width && player->length == p->length &&
-            player->floor > p->end_floor && player->floor >= p->start_floor) { // Ensure within pole's vertical span
-                // Check if pole destination is in starting area
-            if (maze->blocks[p->end_floor][p->width][p->length] == STARTING_AREA) {
-                printf("Player %c slides down pole to starting area at [%d, %d, %d].\n",
-                       player->name, p->end_floor, p->width, p->length);
-                printf("Player %c is returned to starting position and must roll 6 to re-enter maze.\n",
-                       player->name);
-                
-                // Reset player to starting area state
-                player->in_maze = false;
-                player->in_starting_area = true;
-                player->floor = p->end_floor;
-                
-                // Set to appropriate starting position
-                if (player->name == 'A') { player->width = 6; player->length = 12; }
-                else if (player->name == 'B') { player->width = 9; player->length = 8; }
-                else if (player->name == 'C') { player->width = 9; player->length = 16; }
-                
-                return;
+        
+        // Player must be on the pole's position AND able to slide down
+        if (player->width == p->width && player->length == p->length) {
+            
+            // Determine which direction the pole goes
+            if (p->start_floor < p->end_floor) {
+                // Pole goes upward (should not slide down)
+                continue;
             }
             
-            printf("Player %c lands on [%d, %d, %d] which is a pole cell.\n",
-                   player->name, player->floor, player->width, player->length);
-            printf("Player %c slides down and now placed at [%d, %d, %d] in floor %d.\n",
-                   player->name, p->end_floor, p->width, p->length, p->end_floor);
-            player->floor = p->end_floor;
-            return;
+            // Pole goes downward - check if player is above the end floor
+            if (player->floor > p->end_floor && player->floor <= p->start_floor) {
+                
+                // Check if pole destination is in starting area
+                if (maze->blocks[p->end_floor][p->width][p->length] == STARTING_AREA) {
+                    printf("Player %c slides down pole to starting area at [%d, %d, %d].\n",
+                           player->name, p->end_floor, p->width, p->length);
+                    printf("Player %c is returned to starting position and must roll 6 to re-enter maze.\n",
+                           player->name);
+                    
+                    // Reset player to starting area state
+                    player->in_maze = false;
+                    player->in_starting_area = true;
+                    player->floor = p->end_floor;
+                    
+                    // Set to appropriate starting position
+                    if (player->name == 'A') { player->width = 6; player->length = 12; }
+                    else if (player->name == 'B') { player->width = 9; player->length = 8; }
+                    else if (player->name == 'C') { player->width = 9; player->length = 16; }
+                    
+                    return;
+                }
+
+                printf("Player %c lands on [%d, %d, %d] which is a pole cell.\n",
+                       player->name, player->floor, player->width, player->length);
+                printf("Player %c slides down and now placed at [%d, %d, %d] in floor %d.\n",
+                       player->name, p->end_floor, p->width, p->length, p->end_floor);
+                player->floor = p->end_floor;
+                return;
+            }
         }
     }
 }
@@ -544,7 +561,7 @@ Direction rollDirectionDice() {
         case 1: return EAST;
         case 2: return SOUTH;
         case 3: return WEST;
-        case 4: // Fallthrough for NONE
+        case 4: // Fallthrough for NONEzz
         case 5: return NONE;
         default: return NONE; // Should not happen
     }

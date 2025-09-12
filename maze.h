@@ -75,6 +75,8 @@ typedef struct {
     int flag_floor;
     int flag_width;
     int flag_length;
+    
+    int consumable_values[FLOORS][WIDTH][LENGTH];
 } Maze;
 
 // Function Prototypes (ensure these match your definitions in maze.c)

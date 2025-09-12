@@ -1,1 +1,2 @@
 Error: Flag position [1,9,9] is in an inaccessible area (EMPTY or WALL). Aborting game.
+Error: Could not open flag file flag_test.txt.
