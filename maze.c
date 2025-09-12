@@ -370,46 +370,107 @@ bool isWallBlocked(Maze *maze, int floor, int width, int length, Player *player)
 }
 
 bool movePlayer(Maze *maze, Player *player, int steps, int movement_value) {
-    for (int i = 0; i < steps; i++) {
+    int steps_remaining = steps;
+    int initial_steps = steps;
+    
+    while (steps_remaining > 0) {
         int new_width = player->width;
         int new_length = player->length;
 
         switch (player->direction) {
-            case NORTH: new_width--; break;//[1,5,5]->[1,4,5] Width decreases
-            case EAST:  new_length++; break;//[1,5,5]->[1,5,6] Length increases
-            case SOUTH: new_width++; break;//[1,5,5]->[1,6,5] Width increases
-            case WEST:  new_length--; break;//[1,5,5]->[1,5,4] Length decreases
+            case NORTH: new_width--; break;
+            case EAST:  new_length++; break;
+            case SOUTH: new_width++; break;
+            case WEST:  new_length--; break;
             default: break;
         }
 
         if (!isValidPosition(player->floor, new_width, new_length) ||
-            isWallBlocked(maze, player->floor, new_width, new_length,player)) {
+            isWallBlocked(maze, player->floor, new_width, new_length, player)) {
             printf("Player %c rolls %d on the movement dice and cannot move in the %s. Player remains at [%d, %d, %d]\n",
                    player->name, movement_value, directionToString(player->direction),
                    player->floor, player->width, player->length);
             return false;
         }
 
+        // Move one step
         player->width = new_width;
         player->length = new_length;
+        steps_remaining--;
 
-        // Check the type of block the player landed on AFTER moving
-        if (maze->blocks[player->floor][player->width][player->length] == STAIR)
-            handleStairs(maze, player);
-        else if (maze->blocks[player->floor][player->width][player->length] == POLE)
-            handlePoles(maze, player);
+        // Check if we landed on a stair or pole DURING movement
+        bool teleported = false;
+        
+        // Check for stairs
+        for (int i = 0; i < maze->stairs_count && !teleported; i++) {
+            Stair *s = &maze->stairs[i];
+            
+            // Check if player is on start of stair
+            if (player->floor == s->start_floor &&
+                player->width == s->start_width &&
+                player->length == s->start_length) {
+                
+                printf("Player %c encountered a stair at [%d, %d, %d] during movement (%d steps remaining).\n",
+                       player->name, player->floor, player->width, player->length, steps_remaining);
+                
+                // Handle stair movement
+                handleStairs(maze, player);
+                teleported = true;
+            }
+            
+            // Check if player is on end of stair
+            else if (player->floor == s->end_floor &&
+                player->width == s->end_width &&
+                player->length == s->end_length) {
+                
+                printf("Player %c encountered a stair at [%d, %d, %d] during movement (%d steps remaining).\n",
+                       player->name, player->floor, player->width, player->length, steps_remaining);
+                
+                // Handle stair movement
+                handleStairs(maze, player);
+                teleported = true;
+            }
+        }
+        
+        // Check for poles if not already teleported by stairs
+        for (int i = 0; i < maze->poles_count && !teleported; i++) {
+            Pole *p = &maze->poles[i];
+            
+            // Player must be on the pole's position
+            if (player->width == p->width && player->length == p->length &&
+                player->floor >= p->end_floor && player->floor <= p->start_floor) {
+                
+                printf("Player %c encountered a pole at [%d, %d, %d] during movement (%d steps remaining).\n",
+                       player->name, player->floor, player->width, player->length, steps_remaining);
+                
+                // Handle pole movement
+                handlePoles(maze, player);
+                teleported = true;
+            }
+        }
+        
+        // If teleported, continue movement from new position
+        if (teleported && steps_remaining > 0) {
+            printf("Player %c continues movement with %d steps remaining from [%d, %d, %d].\n",
+                   player->name, steps_remaining, player->floor, player->width, player->length);
+        }
     }
+    
+    printf("Player %c completed %d steps and is now at [%d, %d, %d].\n",
+           player->name, initial_steps, player->floor, player->width, player->length);
     return true;
 }
 
 void handleStairs(Maze *maze, Player *player) {
     for (int i = 0; i < maze->stairs_count; i++) {
         Stair *s = &maze->stairs[i];
+        
         // Check if player is on start of stair
         if (player->floor == s->start_floor &&
             player->width == s->start_width &&
             player->length == s->start_length) {
-                if (maze->blocks[s->end_floor][s->end_width][s->end_length] == STARTING_AREA) {
+            
+            if (maze->blocks[s->end_floor][s->end_width][s->end_length] == STARTING_AREA) {
                 printf("Player %c takes stairs to starting area at [%d, %d, %d].\n",
                        player->name, s->end_floor, s->end_width, s->end_length);
                 printf("Player %c is returned to starting position and must roll 6 to re-enter maze.\n",
@@ -418,6 +479,7 @@ void handleStairs(Maze *maze, Player *player) {
                 // Reset player to starting area state
                 player->in_maze = false;
                 player->in_starting_area = true;
+                player->floor = s->end_floor;
                 
                 // Set to appropriate starting position based on player name
                 if (player->name == 'A') { player->width = 6; player->length = 12; }
@@ -427,22 +489,20 @@ void handleStairs(Maze *maze, Player *player) {
                 return;
             }
             
-            printf("Player %c lands on [%d, %d, %d] which is a stair cell.\n",
-                   player->name, player->floor, player->width, player->length);
-            printf("Player %c takes the stairs and now placed at [%d, %d, %d] in floor %d.\n",
+            printf("Player %c takes the stairs and is now at [%d, %d, %d] in floor %d.\n",
                    player->name, s->end_floor, s->end_width, s->end_length, s->end_floor);
             player->floor = s->end_floor;
             player->width = s->end_width;
             player->length = s->end_length;
             return;
         }
+        
         // Check if player is on end of stair
         if (player->floor == s->end_floor &&
             player->width == s->end_width &&
             player->length == s->end_length) {
-            printf("Player %c lands on [%d, %d, %d] which is a stair cell.\n",
-                   player->name, player->floor, player->width, player->length);
-            printf("Player %c takes the stairs and now placed at [%d, %d, %d] in floor %d.\n",
+            
+            printf("Player %c takes the stairs and is now at [%d, %d, %d] in floor %d.\n",
                    player->name, s->start_floor, s->start_width, s->start_length, s->start_floor);
             player->floor = s->start_floor;
             player->width = s->start_width;
@@ -456,7 +516,7 @@ void handlePoles(Maze *maze, Player *player) {
     for (int i = 0; i < maze->poles_count; i++) {
         Pole *p = &maze->poles[i];
         
-        // Player must be on the pole's position AND able to slide down
+        // Player must be on the pole's position
         if (player->width == p->width && player->length == p->length) {
             
             // Determine which direction the pole goes
@@ -488,9 +548,7 @@ void handlePoles(Maze *maze, Player *player) {
                     return;
                 }
 
-                printf("Player %c lands on [%d, %d, %d] which is a pole cell.\n",
-                       player->name, player->floor, player->width, player->length);
-                printf("Player %c slides down and now placed at [%d, %d, %d] in floor %d.\n",
+                printf("Player %c slides down and is now at [%d, %d, %d] in floor %d.\n",
                        player->name, p->end_floor, p->width, p->length, p->end_floor);
                 player->floor = p->end_floor;
                 return;
@@ -498,7 +556,6 @@ void handlePoles(Maze *maze, Player *player) {
         }
     }
 }
-
 void rollDice(Player players[], Maze *maze, int player_index, bool use_direction_dice) {
     Player *player = &players[player_index];
     int movement_value = rollMovementDice();
