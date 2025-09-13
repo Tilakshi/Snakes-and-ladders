@@ -369,7 +369,22 @@ bool isWallBlocked(Maze *maze, int floor, int width, int length, Player *player)
     return false;
 }
 
-bool movePlayer(Maze *maze, Player *player, int steps, int movement_value) {
+// Add this helper function to check if a position has another player
+Player* getPlayerAtPosition(Player players[], int num_players, int floor, int width, int length, Player* current_player) {
+    for (int i = 0; i < num_players; i++) {
+        if (&players[i] != current_player && 
+            players[i].floor == floor && 
+            players[i].width == width && 
+            players[i].length == length &&
+            players[i].in_maze) { // Only check players who are in the maze
+            return &players[i];
+        }
+    }
+    return NULL;
+}
+
+// Updated movePlayer function to handle player capture
+bool movePlayer(Maze *maze, Player *player, int steps, int movement_value, Player all_players[], int num_players) {
     int steps_remaining = steps;
     int initial_steps = steps;
     
@@ -391,6 +406,36 @@ bool movePlayer(Maze *maze, Player *player, int steps, int movement_value) {
                    player->name, movement_value, directionToString(player->direction),
                    player->floor, player->width, player->length);
             return false;
+        }
+
+        // Check if there's another player at the target position
+        Player* captured_player = getPlayerAtPosition(all_players, num_players, player->floor, new_width, new_length, player);
+        
+        if (captured_player != NULL) {
+            // Capture the other player (they must land on the exact cell)
+            printf("Player %c captures player %c at [%d, %d, %d]!\n",
+                   player->name, captured_player->name, player->floor, new_width, new_length);
+            
+            // Move captured player to starting area
+            captured_player->in_maze = false;
+            captured_player->in_starting_area = true;
+            
+            // Set to appropriate starting position based on player name
+            if (captured_player->name == 'A') { 
+                captured_player->width = 6; 
+                captured_player->length = 12; 
+            }
+            else if (captured_player->name == 'B') { 
+                captured_player->width = 9; 
+                captured_player->length = 8; 
+            }
+            else if (captured_player->name == 'C') { 
+                captured_player->width = 9; 
+                captured_player->length = 16; 
+            }
+            
+            printf("Player %c is returned to starting position at [%d, %d, %d] and must roll 6 to re-enter maze.\n",
+                   captured_player->name, captured_player->floor, captured_player->width, captured_player->length);
         }
 
         // Move one step
@@ -459,6 +504,58 @@ bool movePlayer(Maze *maze, Player *player, int steps, int movement_value) {
     printf("Player %c completed %d steps and is now at [%d, %d, %d].\n",
            player->name, initial_steps, player->floor, player->width, player->length);
     return true;
+}
+
+// Updated rollDice function to pass the additional parameters
+void rollDice(Player players[], Maze *maze, int player_index, bool use_direction_dice, int num_players) {
+    Player *player = &players[player_index];
+    int movement_value = rollMovementDice();
+    Direction direction_value = player->direction; // Default to player's current direction
+
+    if (player->in_starting_area) {
+        if (movement_value == 6) {
+            player->in_maze = true;
+            player->in_starting_area = false;
+            // Place players at their initial maze entry points
+            if (player->name == 'A') { player->width = 5; player->length = 12; player->direction = NORTH;}
+            else if (player->name == 'B') { player->width = 9; player->length = 7; player->direction = WEST;}
+            else if (player->name == 'C') { player->width = 9; player->length = 17; player->direction = EAST;}
+            printf("Player %c is at the starting area and rolls 6 on the movement dice and is placed on [%d, %d, %d] of the maze.\n",
+                   player->name, player->floor, player->width, player->length);
+        } else {
+            printf("Player %c is at the starting area and rolls %d on the movement dice and cannot enter the maze.\n",
+                   player->name, movement_value);
+        }
+        return; // Player turn ends if in starting area
+    }
+
+    // Player is in the maze
+    if (use_direction_dice) {
+        Direction rolled_direction = rollDirectionDice();
+        if (rolled_direction != NONE) {
+            player->direction = rolled_direction; // Update player's direction
+            printf("Player %c rolls %d on the movement dice and %s on the direction dice, changes direction to %s and moves %d cells and is now ",
+                   player->name, movement_value, directionToString(rolled_direction),
+                   directionToString(player->direction), movement_value);
+        } else {
+            // Direction dice rolled NONE, keep current direction
+            printf("Player %c rolls %d on the movement dice and EMPTY on the direction dice, keeps direction %s and moves %d cells and is now ",
+                   player->name, movement_value, directionToString(player->direction), movement_value);
+        }
+    } else {
+        // No direction dice, keep current direction
+        printf("Player %c rolls %d on the movement dice and moves %s by %d cells and is now ",
+               player->name, movement_value, directionToString(player->direction), movement_value);
+    }
+
+    bool moved_successfully = movePlayer(maze, player, movement_value, movement_value, players, num_players);
+    if (moved_successfully) {
+        printf("at [%d, %d, %d].\n", player->floor, player->width, player->length);
+    }
+
+    // Assuming movement_points is adjusted somewhere else or not actively used in this snippet's game logic
+    printf("Player %c moved %d that cost %d movement points and is left with %d movement points and is moving in the %s.\n",
+           player->name, movement_value, movement_value, player->movement_points, directionToString(player->direction));
 }
 
 void handleStairs(Maze *maze, Player *player) {
@@ -556,56 +653,7 @@ void handlePoles(Maze *maze, Player *player) {
         }
     }
 }
-void rollDice(Player players[], Maze *maze, int player_index, bool use_direction_dice) {
-    Player *player = &players[player_index];
-    int movement_value = rollMovementDice();
-    Direction direction_value = player->direction; // Default to player's current direction
 
-    if (player->in_starting_area) {
-        if (movement_value == 6) {
-            player->in_maze = true;
-            player->in_starting_area = false;
-            // Place players at their initial maze entry points
-            if (player->name == 'A') { player->width = 5; player->length = 12; player->direction = NORTH;}
-            else if (player->name == 'B') { player->width = 9; player->length = 7; player->direction = WEST;}
-            else if (player->name == 'C') { player->width = 9; player->length = 17; player->direction = EAST;}
-            printf("Player %c is at the starting area and rolls 6 on the movement dice and is placed on [%d, %d, %d] of the maze.\n",
-                   player->name, player->floor, player->width, player->length);
-        } else {
-            printf("Player %c is at the starting area and rolls %d on the movement dice and cannot enter the maze.\n",
-                   player->name, movement_value);
-        }
-        return; // Player turn ends if in starting area
-    }
-
-    // Player is in the maze
-    if (use_direction_dice) {
-        Direction rolled_direction = rollDirectionDice();
-        if (rolled_direction != NONE) {
-            player->direction = rolled_direction; // Update player's direction
-            printf("Player %c rolls %d on the movement dice and %s on the direction dice, changes direction to %s and moves %d cells and is now ",
-                   player->name, movement_value, directionToString(rolled_direction),
-                   directionToString(player->direction), movement_value);
-        } else {
-            // Direction dice rolled NONE, keep current direction
-            printf("Player %c rolls %d on the movement dice and EMPTY on the direction dice, keeps direction %s and moves %d cells and is now ",
-                   player->name, movement_value, directionToString(player->direction), movement_value);
-        }
-    } else {
-        // No direction dice, keep current direction
-        printf("Player %c rolls %d on the movement dice and moves %s by %d cells and is now ",
-               player->name, movement_value, directionToString(player->direction), movement_value);
-    }
-
-    bool moved_successfully = movePlayer(maze, player, movement_value, movement_value); // Pass movement_value for logging
-    if (moved_successfully) {
-        printf("at [%d, %d, %d].\n", player->floor, player->width, player->length);
-    }
-
-    // Assuming movement_points is adjusted somewhere else or not actively used in this snippet's game logic
-    printf("Player %c moved %d that cost %d movement points and is left with %d movement points and is moving in the %s.\n",
-           player->name, movement_value, movement_value, player->movement_points, directionToString(player->direction));
-}
 
 
 // ---------- RANDOM ----------
@@ -634,3 +682,4 @@ const char* directionToString(Direction dir) {
         default:    return "UNKNOWN"; // Fallback for safety
     }
 }
+

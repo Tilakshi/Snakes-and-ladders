@@ -91,13 +91,18 @@ void placeWalls(Maze *maze);
 void initializePlayers(Player players[]);
 bool isValidPosition(int floor, int width, int length);
 bool isWallBlocked(Maze *maze, int floor, int width, int length, Player *player);
-bool movePlayer(Maze *maze, Player *player, int steps, int movement_value);
+bool movePlayer(Maze *maze, Player *player, int steps, int movement_value, Player all_players[], int num_players);
 void handleStairs(Maze *maze, Player *player);
 void handlePoles(Maze *maze, Player *player);
-void rollDice(Player players[], Maze *maze, int player_index, bool use_direction_dice);
+void rollDice(Player players[], Maze *maze, int player_index, bool use_direction_dice, int num_players);
 int rollMovementDice();
 Direction rollDirectionDice();
 const char* directionToString(Direction dir);
 bool canPlaceStructure(int floor, int width, int length, Maze *maze);
+Player* getPlayerAtPosition(Player players[], int num_players, int floor, int width, int length, Player* current_player);
+
+void printMazeLayout(Maze *maze);
+void printMazeDetailed(Maze *maze);
+void printPlayerPositions(Player players[], int num_players);
 
 #endif 
